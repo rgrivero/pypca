@@ -181,9 +181,16 @@ class PCA(object):
             else :
                 pca_func = pca
             self.eigen_values_,self.eigen_vectors_ = pca_func(X,self.k)
-
-        if not self.kernel :
+        
+        if self.kernel :
+            total_variance = X.diagonal().sum()
+        else :
             self.mean = X.mean(0)
+            diff = X - self.mean
+            total_variance = (diff*diff).sum()/(X.shape[0]-1)
+
+        self.explained_variance_ = self.eigen_values_.sum()/total_variance
+            
         return self
         
     def transform(self,X,whiten = False):
