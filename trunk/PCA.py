@@ -92,10 +92,10 @@ def extern_pca(data,k):
                     U = X.T * v * S^(-1)
     """
     data_m = data - data.mean(0)
-    K = np.dot(data_m,data_m.T)/(len(data)-1)
+    K = np.dot(data_m,data_m.T)
     w,v = eigen_symmetric(K,k = k,which = 'LA')
     U = np.dot(data.T,v/np.sqrt(w))
-    return w[::-1],U[:,::-1]
+    return w[::-1]/(len(data)-1),U[:,::-1]
 
 def full_kpca(data):
     """
@@ -177,12 +177,16 @@ class PCA(object):
             if self.kernel :
                 pca_func = kpca
             elif self.extern :
-                pca_func = svd_pca
+                pca_func = extern_pca
             else :
                 pca_func = pca
-            self.eigen_values_,self.eigen_vectors_ = pca_func(X,k)
+            self.eigen_values_,self.eigen_vectors_ = pca_func(X,self.k)
+
+        if not self.kernel :
+            self.mean = X.mean(0)
+        return self
         
-    if transform(self,X,whiten = False):
+    def transform(self,X,whiten = False):
         """
             Project data on the principal components. If the whitening
             option is used, components will be normalized to that they
@@ -200,12 +204,37 @@ class PCA(object):
                of the kernel between sample i and the j-th sample used
                at train time. Thus, if fit was called with a NxN kernel
                matrix, X should be a MxN matrix.
+               
+               The projection in the kernel case is made to be equivalent
+               to the projection in the linear case.
+               
+                   X.T = U * S * v.T
+                   C = 1/(N-1) * X.T * X
+                   X.T * X = U*S^2*U.T
+                   K = X * X.T = v*S^2*v.T
+                   
+                   U = X.T * v * S^(-1)
+               
+               The projection with PCA is :
+                   X' = X * U
+                   X' = X * X.T * v * S^(-1)
+                   X' = K * v * S^(-1)
+                   
+               For whiten PCA :
+                   X' = X * U * S^(-1) * sqrt(N-1)
+                   X' = X * X.T * v * S^(-1) * S^(-1) * sqrt(N-1)
+                   X' = K * S^(-2) * sqrt(N-1)
         """
+    
         
-        pr = np.dot(X,self.eigen_vectors_)
-        if whiten :
-            if self.kernel :
-                pr /= self.eigen_values_
+        if self.kernel :
+            pr = np.dot(X,self.eigen_vectors_)
+            if whiten :
+                pr /= self.eigen_values_ / np.sqrt(X.shape[0]-1)
             else :
+                pr /= np.sqrt(self.eigen_values_)
+        else :
+            pr = np.dot(X - self.mean,self.eigen_vectors_)
+            if whiten:
                 pr /= np.sqrt(self.eigen_values_)
         return pr
